@@ -1,0 +1,30 @@
+[package]
+authors = ["florian.leon <florian.leon@sii.fr>"]
+name = "datafusion_imu"
+description = "Performs datafusion for 6 or 9 DOF sensors"
+version = "0.1.3"
+edition = "2021"
+license = "0BSD"
+readme = "README.md"
+exclude = ["/.cargo", "/.vscode", "*.code-workspace"]
+keywords = ["no-std", "datafusion", "IMU", "Kalman"]
+categories = ["no-std"]
+repository = "https://github.com/SII-Public-Research/Datafusion"
+
+[dependencies.nalgebra]
+version = "0.31.0"
+default-features = false
+features = ["libm-force"]
+
+[dependencies.micromath]
+version = "2.0.0"
+
+[dev-dependencies.rppal]
+version = "0.13.1"
+features = ["hal"]
+
+[dev-dependencies.embedded-hal]
+version = "0.2.7"
+
+[dev-dependencies.adafruit_nxp]
+version = "0.1.2"
