@@ -1,6 +1,3 @@
-[build]
-target = "aarch64-unknown-linux-gnu"
-
 [alias]
 re = "run --example"
 rre = "run --release --example"

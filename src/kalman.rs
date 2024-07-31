@@ -3,35 +3,44 @@
 use nalgebra::{Matrix2, Vector2};
 
 #[derive(Copy, Clone, Debug)]
-/// This Kalman filter is inspired from this [post](http://blog.tkjelectronics.dk/2012/09/a-practical-approach-to-kalman-filter-and-how-to-implement-it/) 
+/// This Kalman filter is inspired from this [post](http://blog.tkjelectronics.dk/2012/09/a-practical-approach-to-kalman-filter-and-how-to-implement-it/)
 /// and is the conversion of the same C library in Rust.
 pub struct Kalman {
-    angle: f32, /// The angle calculated by the Kalman filter - part of the 2x1 state vector
-    bias: f32, /// The gyro bias calculated by the Kalman filter - part of the 2x1 state vector
-    rate: f32, /// Unbiased rate calculated from the rate and the calculated bias
-    cov_error: Matrix2<f32>, /// Error covariance matrix - This is a 2x2 matrix
-    k: Vector2<f32>, /// Kalman gain - This is a 2x1 vector
-    y: f32, ///Angle difference
-    s: f32, ///Estimate error
-    q_angle: f32, /// Process noise variance for the accelerometer
-    q_bias: f32, /// Process noise variance for the gyro bias
+    angle: f32,
+    /// The angle calculated by the Kalman filter - part of the 2x1 state vector
+    bias: f32,
+    /// The gyro bias calculated by the Kalman filter - part of the 2x1 state vector
+    rate: f32,
+    /// Unbiased rate calculated from the rate and the calculated bias
+    cov_error: Matrix2<f32>,
+    /// Error covariance matrix - This is a 2x2 matrix
+    k: Vector2<f32>,
+    /// Kalman gain - This is a 2x1 vector
+    y: f32,
+    ///Angle difference
+    s: f32,
+    ///Estimate error
+    q_angle: f32,
+    /// Process noise variance for the accelerometer
+    q_bias: f32,
+    /// Process noise variance for the gyro bias
     r_measure: f32, // Measurement noise variance - this is actually the variance of the measurement noise
 }
 
 impl Kalman {
     /// Creates a new Kalman filter
     pub fn new() -> Self {
-        Kalman { 
-            angle: 0.0, 
-            bias: 0.0, 
-            rate: 0.0, 
-            cov_error: Matrix2::<f32>::identity(), 
-            k: Vector2::<f32>::zeros(), 
-            y: 0.0, 
-            s: 0.0, 
-            q_angle: 0.001, 
-            q_bias: 0.003, 
-            r_measure: 0.03 
+        Kalman {
+            angle: 0.0,
+            bias: 0.0,
+            rate: 0.0,
+            cov_error: Matrix2::<f32>::identity(),
+            k: Vector2::<f32>::zeros(),
+            y: 0.0,
+            s: 0.0,
+            q_angle: 0.001,
+            q_bias: 0.003,
+            r_measure: 0.03,
         }
     }
     /// The angle should be in degrees and the rate should be in degrees per second and the delta time in seconds.
@@ -44,7 +53,9 @@ impl Kalman {
         self.angle += dt * self.rate;
         // Update estimation error covariance - Project the error covariance ahead
         /* Step 2 */
-        self.cov_error[(0, 0)] += dt * (dt * self.cov_error[(1, 1)] - self.cov_error[(0, 1)] - self.cov_error[(1, 0)] + self.q_angle);
+        self.cov_error[(0, 0)] += dt
+            * (dt * self.cov_error[(1, 1)] - self.cov_error[(0, 1)] - self.cov_error[(1, 0)]
+                + self.q_angle);
         self.cov_error[(0, 1)] -= dt * self.cov_error[(1, 1)];
         self.cov_error[(1, 0)] -= dt * self.cov_error[(1, 1)];
         self.cov_error[(1, 1)] += self.q_bias * dt;
@@ -73,7 +84,6 @@ impl Kalman {
         self.cov_error[(0, 1)] -= self.k[0] * self.cov_error[(0, 1)];
         self.cov_error[(1, 0)] -= self.k[1] * self.cov_error[(0, 0)];
         self.cov_error[(1, 1)] -= self.k[1] * self.cov_error[(0, 1)];
-
     }
 
     /// Sets the angle, this should be set as the starting angle of the filter
@@ -121,5 +131,11 @@ impl Kalman {
     /// Returns the Measurement noise variance.
     pub fn get_r_measure(&self) -> f32 {
         self.r_measure
+    }
+}
+
+impl Default for Kalman {
+    fn default() -> Self {
+        Self::new()
     }
 }

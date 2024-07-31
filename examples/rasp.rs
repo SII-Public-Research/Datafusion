@@ -3,13 +3,12 @@ use std::time::Instant;
 use rppal::hal::Delay;
 use rppal::i2c::I2c;
 
-use embedded_hal::blocking::delay::*;
+use embedded_hal::delay::*;
 
 use adafruit_nxp::*;
-use datafusion_imu::{self as _, Fusion};
+use datafusion_imu::{self as _, filters::Smooth, Fusion};
 
 fn main() -> Result<(), SensorError<rppal::i2c::Error>> {
-
     // Init a delay used in certain functions and between each loop.
     let mut delay = Delay::new();
 
@@ -47,11 +46,13 @@ fn main() -> Result<(), SensorError<rppal::i2c::Error>> {
     let mag_rz = sensor.mag_sensor.get_scaled_z();
 
     // Create a datafusion object
-    let mut fusion = Fusion::new(0.05, 20., 50);
+    let mut fusion = Fusion::new(0.05, 20., Smooth::new(50), Smooth::new(50), Smooth::new(50));
     fusion.set_mode(datafusion_imu::Mode::Dof9);
 
     // Set data to the fusion object
-    fusion.set_data_dof9(acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z, mag_rx, mag_ry, mag_rz);
+    fusion.set_data_dof9(
+        acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z, mag_rx, mag_ry, mag_rz,
+    );
 
     // Initialize the datafusion object
     fusion.init();
@@ -63,7 +64,6 @@ fn main() -> Result<(), SensorError<rppal::i2c::Error>> {
     let mut time = Instant::now();
 
     loop {
-
         // Calculate delta time in seconds
         let dt = time.elapsed().as_micros() as f32 / 1_000_000.;
         time = Instant::now();
@@ -86,7 +86,9 @@ fn main() -> Result<(), SensorError<rppal::i2c::Error>> {
         let mag_rz = sensor.mag_sensor.get_scaled_z();
 
         // Set data to the fusion object
-        fusion.set_data_dof9(acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z, mag_rx, mag_ry, mag_rz);
+        fusion.set_data_dof9(
+            acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z, mag_rx, mag_ry, mag_rz,
+        );
 
         // Perform a step of the algorithm
         fusion.step(dt);
@@ -103,6 +105,6 @@ fn main() -> Result<(), SensorError<rppal::i2c::Error>> {
         std::println!(" Angle Z: {} °", angle_z);
         std::println!("Total distance traveled: {} cm", distance);
 
-        delay.delay_ms(5_u8);
+        delay.delay_ms(5_u32);
     }
 }

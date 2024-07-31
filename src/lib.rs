@@ -1,8 +1,8 @@
 //! # Datafusion library for 6 and 9 degrees of freedom sensors.
-//! 
+//!
 //! [![made-with-rust](https://img.shields.io/badge/Made%20with-Rust-1f425f?style=plastic)](https://www.rust-lang.org/)
 //! [![powered-by-sii](https://img.shields.io/badge/Powered%20By-SII-blue?style=plastic)](https://sii-group.com/fr-FR/sii-sud-ouest)
-//! 
+//!
 //! You have the choice in this library to apply the filters on two types of sensors:
 //! - A 6 degrees of freedom sensor with a 3-axis accelerometer and 3-axis gyroscope -> Mode `Dof6`
 //! - A 9 degrees of freedom sensor with a 3-axis accelerometer, 3-axis gyroscope and 3-axis magnetometer -> Mode `Dof9`
@@ -10,9 +10,9 @@
 //! > 🔴 ***For now, the sensor needs to be perfectly flat to work. Also, using angle and distance measurement at the same time is not recommended with a 6Dof sensor.***  
 //! > More specifically, for the distance it doesn't really matter as the high pass filter will automatically delete the angle offset after a few second.  
 //! > However, for the angle (except with a magnetometer) the sensor has to be flat or at least stay within the same inclination on the X and Y-axis after initialization.  
-//! 
+//!
 //! In the example provided below, we use our own driver for an Adafruit sensor. So of course, you can use any other driver you want.
-//! 
+//!
 //! ### Angle data
 //! When the sensor is flat and whatever the mode used, X and Y angles are absolute roll and pitch values in degrees.
 //! A Kalman filter is applied between acceleration and angular speed to produce a reliable output.
@@ -21,131 +21,131 @@
 //! However, when using a Dof9 sensor, the Kalman filter output on the Z or Yaw-axis is an absolute angle in degrees. This is the preferred method.
 //! As long as there is no magnetic interference, you we will be able a obtain a heading angle down to a 2 to 3 degree accuracy.
 //! In the case of magnetic interferences, if it is much greater than the earth magnetic field, then the output won't be the magnetic north but a relative angle to the magnetic interference.
-//! 
+//!
 //! ### Distance data
 //! For the distance data, the algorithm is the same whatever the mode used as it only uses acceleration data on X and Y.
-//! It is a succession of high pass filters, low pass filters and integrations. 
-//! It works perfectly fine on a short distance, e.g < 5cm, and it extremely accurate in this range. 
-//! However, over this range the result highly rely on the speed. 
-//! This means that, if the speed is too low, the distance will be under estimated. 
-//! Same problem if the speed is too high, the distance will be over estimated. 
-//! This problem is currently being worked on and the lib will be updated if a workaround is found. 
-//! 
+//! It is a succession of high pass filters, low pass filters and integrations.
+//! It works perfectly fine on a short distance, e.g < 5cm, and it extremely accurate in this range.
+//! However, over this range the result highly rely on the speed.
+//! This means that, if the speed is too low, the distance will be under estimated.
+//! Same problem if the speed is too high, the distance will be over estimated.
+//! This problem is currently being worked on and the lib will be updated if a workaround is found.
+//!
 //! You have the ability to disable the distance measurement by calling the `disable_distance` function.
-//! 
+//!
 //! ***Please note that distances measurements are purely experimental but it's a place to start as the accuracy is not optimal.***
-//! 
+//!
 //! ### Usage
 //! The example below uses [rppal](https://crates.io/crates/rppal) crates and runs on a Raspberry Pi.
-//! 
+//!
 //! Please note that this example and library have been developed in parallel with a driver for a Dof9 sensor from Adafruit.
-//! 
-//! ```no_run
+//!
+//! ```ignore
 //! use std::time::Instant;
-//! 
+//!
 //! use rppal::hal::Delay;
 //! use rppal::i2c::I2c;
-//! 
-//! use embedded_hal::blocking::delay::*;
-//! 
+//!
+//! use embedded_hal::delay::*;
+//!
 //! use adafruit::*;
-//! use datafusion::{self as _, Fusion};
-//! 
+//! use datafusion_imu::{self as _, filters::Smooth, Fusion};
+//!
 //! fn main() -> Result<(), SensorError<rppal::i2c::Error>> {
-//! 
+//!
 //!     // Init a delay used in certain functions and between each loop.
 //!     let mut delay = Delay::new();
-//! 
+//!
 //!     // Setup the raspberry's I2C interface to create the sensor.
 //!     let i2c = I2c::new().unwrap();
-//! 
+//!
 //!     // Create an Adafruit object
 //!     let mut sensor = AdafruitNXP::new(0x8700A, 0x8700B, 0x0021002C, i2c);
-//! 
+//!
 //!     // Check if the sensor is ready to go
 //!     let ready = sensor.begin()?;
 //!     if !ready {
 //!         std::eprintln!("Sensor not detected, check your wiring!");
 //!         std::process::exit(1);
 //!     }
-//! 
+//!
 //!     sensor.set_accel_range(config::AccelMagRange::Range8g)?;
 //!     sensor.set_gyro_range(config::GyroRange::Range500dps)?;
 //!     // etc...
-//! 
+//!
 //!     // Initialize the sensor
 //!     sensor.read_data()?;
-//! 
+//!
 //!     let acc_x = sensor.accel_sensor.get_scaled_x();
 //!     let acc_y = sensor.accel_sensor.get_scaled_y();
 //!     let acc_z = sensor.accel_sensor.get_scaled_z();
-//! 
+//!
 //!     let gyro_x = sensor.gyro_sensor.get_scaled_x();
 //!     let gyro_y = sensor.gyro_sensor.get_scaled_y();
 //!     let gyro_z = sensor.gyro_sensor.get_scaled_z();
-//! 
+//!
 //!     let mag_rx = sensor.mag_sensor.get_scaled_x();
 //!     let mag_ry = sensor.mag_sensor.get_scaled_y();
 //!     let mag_rz = sensor.mag_sensor.get_scaled_z();
-//! 
+//!
 //!     // Create a datafusion object
-//!     let mut fusion = Fusion::new(0.05, 20., 50);
+//!     let mut fusion = Fusion::new(0.05, 20., Smooth::new(50), Smooth::new(50), Smooth::new(50));
 //!     fusion.set_mode(datafusion::Mode::Dof9);
-//! 
+//!
 //!     // Set data to the fusion object
 //!     fusion.set_data_dof9(acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z, mag_rx, mag_ry, mag_rz);
-//! 
+//!
 //!     // Initialize the datafusion object
 //!     fusion.init();
-//! 
+//!
 //!     // Set magnetic declination --> 1.39951° in Toulouse, France
 //!     fusion.set_declination(1.39951);
-//! 
+//!
 //!     // Setting up the delta time
 //!     let mut time = Instant::now();
-//! 
+//!
 //!     loop {
-//! 
+//!
 //!         // Calculate delta time in seconds
 //!         let dt = time.elapsed().as_micros() as f32 / 1_000_000.;
 //!         time = Instant::now();
-//! 
+//!
 //!         // Update old values for the next loop
 //!         fusion.set_old_values(acc_x, acc_y);
-//! 
+//!
 //!         sensor.read_data()?;
-//! 
+//!
 //!         let acc_x = sensor.accel_sensor.get_scaled_x();
 //!         let acc_y = sensor.accel_sensor.get_scaled_y();
 //!         let acc_z = sensor.accel_sensor.get_scaled_z();
-//! 
+//!
 //!         let gyro_x = sensor.gyro_sensor.get_scaled_x();
 //!         let gyro_y = sensor.gyro_sensor.get_scaled_y();
 //!         let gyro_z = sensor.gyro_sensor.get_scaled_z();
-//! 
+//!
 //!         let mag_rx = sensor.mag_sensor.get_scaled_x();
 //!         let mag_ry = sensor.mag_sensor.get_scaled_y();
 //!         let mag_rz = sensor.mag_sensor.get_scaled_z();
-//! 
+//!
 //!         // Set data to the fusion object
 //!         fusion.set_data_dof9(acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z, mag_rx, mag_ry, mag_rz);
-//! 
+//!
 //!         // Perform a step of the algorithm
 //!         fusion.step(dt);
-//! 
+//!
 //!         // Collect outputs
 //!         let angle_x = fusion.get_x_angle();
 //!         let angle_y = fusion.get_y_angle();
 //!         let angle_z = fusion.get_heading();
 //!         let distance = fusion.get_final_distance();
-//! 
+//!
 //!         // Print data
 //!         std::println!("Angle X: {} °", angle_x);
 //!         std::println!("Angle Y: {} °", angle_y);
 //!         std::println!("Angle Z: {} °", angle_z);
 //!         std::println!("Total distance traveled: {} cm", distance);
-//! 
-//!         delay.delay_ms(5_u8);
+//!
+//!         delay.delay_ms(5_u32);
 //!     }
 //! }
 //! ```
@@ -153,13 +153,14 @@
 #![no_std]
 #![deny(missing_docs)]
 
+#[cfg(feature = "alloc")]
 #[macro_use]
 extern crate alloc;
 
-pub mod kalman;
 pub mod filters;
+pub mod kalman;
+use crate::filters::{AvgFilter, HPFilter, LPFilter};
 use crate::kalman::Kalman;
-use crate::filters::{Smooth, HPFilter, LPFilter};
 
 #[allow(unused_imports)]
 use micromath::F32Ext;
@@ -175,7 +176,7 @@ pub const RAD2DEG: f32 = 180.0 / PI;
 /// Constant to convert degrees to radians.
 pub const DEG2RAD: f32 = PI / 180.0;
 /// Square root of g.
-pub const SQRT_G: f32 = 3.13155712;
+pub const SQRT_G: f32 = 3.131_557;
 /// Tweaked square root of g. Used to correct the output value.
 pub const SQRT_G_KALMAN: f32 = SQRT_G * 3.0 / 4.0;
 /// Converts g to a scale value, here in squared centimeters.
@@ -189,12 +190,12 @@ pub enum Mode {
     /// ***9*** degrees of freedom ie, *Accelerometer, Gyroscope & Magnetometer*.
     Dof6,
     /// ***6*** degrees of freedom ie, *Accelerometer & Gyroscope*.
-    Dof9
+    Dof9,
 }
 
 /// #### Datafusion structure to compute distance traveled and angle.
-/// 
-/// This will allow you to: 
+///
+/// This will allow you to:
 /// - Chose which degrees of freedom to use.
 /// - Performs a Kalman filter:
 ///     - Angle for X and Y-axis
@@ -203,7 +204,7 @@ pub enum Mode {
 /// - Perform a series of filters X and Y-axis to:
 ///     - Get the velocity on each axis
 ///     - Get the distance traveled
-pub struct Fusion {
+pub struct Fusion<Smooth: AvgFilter> {
     //Generic Variables
     acc_x: f32,
     acc_y: f32,
@@ -303,7 +304,7 @@ pub struct Fusion {
     /// High pass filter for the speed of the Y-axis.
     hp_vy: HPFilter,
     /// High pass filter entry for the speed of the Y-axis.
-    hp_e_vy : f32,
+    hp_e_vy: f32,
     /// Old high pass filter entry for the speed of the Y-axis.
     old_hp_e_vy: f32,
     /// High pass filter output for the speed of the Y-axis.
@@ -363,27 +364,32 @@ pub struct Fusion {
     counter_offset: u32,
 }
 
-impl Fusion {
-    /// ### Create a new Fusion object. 
+impl<Smooth: AvgFilter> Fusion<Smooth> {
+    /// ### Create a new Fusion object.
     /// ***You will need to provide data from a sensor!***
     ///  
     /// *hp_fc* and *lp_fc* are the cut-off frequencies of the high-pass and low-pass filters.
     /// We recommend 0.05 Hz for the high pass filter and 20.0 for the low pass filter.
     /// If you chose to disable distance computation, the first two parameters are not important and can be set to 0.0.
-    /// 
-    /// *num_readings* is the number of readings used to compute the moving average.
-    /// As the number of readings increases, more information about the signal will be lost. 
-    /// On the other hand, the lower the number of readings, the rougher the signal and the more approximate the measurement. 
-    /// It is therefore necessary to find a middle ground, so we recommend a value between 25 and 50.
-    /// 
+    ///
+    /// *yaw_filter* filter used for smoothing data
+    /// *x_filter* filter used for smoothing data
+    /// *y_filter* filter used for smoothing data
+    ///
     /// All variables are initialized to 0.0.
-    /// 
+    ///
     /// ***Usage:***
     /// ```no_run
-    /// use datafusion::{self as _, Fusion};
-    /// let mut fusion = Fusion::new(0.05, 20., 50);
+    /// use datafusion_imu::{self as _, filters::Smooth, Fusion};
+    /// let mut fusion = Fusion::new(0.05, 20., Smooth::new(50), Smooth::new(50), Smooth::new(50));
     /// ```
-    pub fn new(hp_fc: f32, lp_fc: f32, num_readings: usize) -> Self {
+    pub fn new(
+        hp_fc: f32,
+        lp_fc: f32,
+        yaw_filter: Smooth,
+        x_filter: Smooth,
+        y_filter: Smooth,
+    ) -> Self {
         Fusion {
             //General Variables
             acc_x: 0.,
@@ -409,7 +415,7 @@ impl Fusion {
             kalman_x: Kalman::new(),
             kalman_y: Kalman::new(),
             kalman_z: Kalman::new(),
-            ma_yaw: Smooth::new(num_readings),
+            ma_yaw: yaw_filter,
             offset_kalman: 0.,
             sens: 0,
             sens_prec: 0,
@@ -445,14 +451,14 @@ impl Fusion {
             lp_s_dx: 0.,
             //MOVING AVERAGE
             //Moving average filter of the X-axis
-            ma_x: Smooth::new(num_readings),
+            ma_x: x_filter,
             average_x: 0.,
             offset_x: 0.,
             //Y-AXIS
             //SPEED
             //High pass filter for the speed of the Y-axis
             hp_vy: HPFilter::new(hp_fc),
-            hp_e_vy : 0.,
+            hp_e_vy: 0.,
             old_hp_e_vy: 0.,
             hp_s_vy: 0.,
             //We define speed and distance variables
@@ -474,7 +480,7 @@ impl Fusion {
             lp_s_dy: 0.,
             //MOVING AVERAGE
             //Moving average filter of the Y-axis
-            ma_y: Smooth::new(num_readings),
+            ma_y: y_filter,
             average_y: 0.,
             offset_y: 0.,
             //Other variables
@@ -490,29 +496,43 @@ impl Fusion {
         }
     }
 
-    /// ### Initialize the device. 
+    /// ### Initialize the device.
     /// ***You must provide raw data before doing calling the function. Also, the mode defaults to a 6Dof sensor. So you might need to change the mode.***
-    /// 
+    ///
     /// - Initialize the Kalman filter.
     /// - The distance filters have been initialized with the default values within the creation of the device.
-    /// 
+    ///
     /// ***Usage (9Dof):***
     /// ```no_run
-    /// use datafusion::{self as _, Fusion};
-    /// let mut fusion = Fusion::new(0.05, 20., 50);
-    /// fusion.set_mode(datafusion::Mode::Dof9);
+    /// use datafusion_imu::{self as _, filters::Smooth, Fusion};
+    /// let acc_x: f32 = 0.0; // Initial acc_x value
+    /// let acc_y: f32 = 0.0; // Initial acc_y value
+    /// let acc_z: f32 = 0.0; // Initial acc_z value
+    /// let gyro_x: f32 = 0.0; // Initial gryo_x value
+    /// let gyro_y: f32 = 0.0; // Initial gryo_y value
+    /// let gyro_z: f32 = 0.0; // Initial gryo_z value
+    /// let mag_rx: f32 = 0.0; // Initial mag_rx value
+    /// let mag_ry: f32 = 0.0; // Initial mag_ry value
+    /// let mag_rz: f32 = 0.0; // Initial mag_rz value
+    /// let mut fusion = Fusion::new(0.05, 20., Smooth::new(50), Smooth::new(50), Smooth::new(50));
+    /// fusion.set_mode(datafusion_imu::Mode::Dof9);
     /// fusion.set_data_dof9(acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z, mag_rx, mag_ry, mag_rz);
     /// fusion.init();
     /// ```
     /// ***Usage (6Dof):***
     /// ```no_run
-    /// use datafusion::{self as _, Fusion};
-    /// let mut fusion = Fusion::new(0.05, 20., 50);
+    /// use datafusion_imu::{self as _, filters::Smooth, Fusion};
+    /// let acc_x: f32 = 0.0; // Initial acc_x value
+    /// let acc_y: f32 = 0.0; // Initial acc_y value
+    /// let acc_z: f32 = 0.0; // Initial acc_z value
+    /// let gyro_x: f32 = 0.0; // Initial gryo_x value
+    /// let gyro_y: f32 = 0.0; // Initial gryo_y value
+    /// let gyro_z: f32 = 0.0; // Initial gryo_z value
+    /// let mut fusion = Fusion::new(0.05, 20., Smooth::new(50), Smooth::new(50), Smooth::new(50));
     /// fusion.set_data_dof6(acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z);
     /// fusion.init();
     /// ```
     pub fn init(&mut self) {
-
         // Initialize the Kalman filter
         self.roll = self.compute_roll();
         self.pitch = self.compute_pitch();
@@ -523,43 +543,57 @@ impl Fusion {
         self.kalman_z.set_angle(self.yaw);
 
         self.offset_kalman = self.yaw;
-
     }
 
-
     /// ### Performs a step of all filters.
-    /// ***You must provide your own delta time in seconds.*** 
-    /// 
+    /// ***You must provide your own delta time in seconds.***
+    ///
     /// The more accurate the delta time, the more accurate the results.
     /// > 🔴 ***Always set raw data before calling this function.***
     /// - It updates the Kalman filters on all axis.
     /// - Then, it updates the speed and distance filters on all axis.
     /// - Finally, it updates the moving average filter on all axis.
-    /// 
+    ///
     /// ***Usage:***
     /// ```no_run
+    /// // Imports
+    /// use std::time::Instant;
+    /// use rppal::hal::Delay;
+    /// use embedded_hal::delay::DelayNs;
+    /// use datafusion_imu::Fusion;
+    /// use datafusion_imu::filters::Smooth;
+    ///
+    /// let acc_x: f32 = 0.0; // Initial acc_x value
+    /// let acc_y: f32 = 0.0; // Initial acc_y value
+    /// let acc_z: f32 = 0.0; // Initial acc_z value
+    /// let gyro_x: f32 = 0.0; // Initial gryo_x value
+    /// let gyro_y: f32 = 0.0; // Initial gryo_y value
+    /// let gyro_z: f32 = 0.0; // Initial gryo_z value
+    /// let mag_rx: f32 = 0.0; // Initial mag_rx value
+    /// let mag_ry: f32 = 0.0; // Initial mag_ry value
+    /// let mag_rz: f32 = 0.0; // Initial mag_rz value
     /// // Init a delay used in certain functions and between each loop.
     /// let mut delay = Delay::new();
     /// // Setting up the delta time within a std environment
     /// let mut time = Instant::now();
+    /// let mut fusion = Fusion::new(0.2, 20.0, Smooth::new(10), Smooth::new(10), Smooth::new(10));
     /// loop {
     ///     // Calculate delta time in seconds
     ///    let dt = time.elapsed().as_micros() as f32 / 1_000_000.;
     ///    time = Instant::now();
-    /// 
+    ///
     ///    // Set the raw data
     ///    fusion.set_data_dof9(acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z, mag_rx, mag_ry, mag_rz);
-    /// 
+    ///
     ///    // Perform a step of the algorithm
     ///    fusion.step(dt);
-    /// 
+    ///
     ///    delay.delay_ms(5);
     /// }
     /// ```
     /// ***You can get all the results by calling the get_\* functions.***
     /// > ***NB: The results are not updated until you call the step function again.***
     pub fn step(&mut self, dt: f32) {
-
         // KALMAN
         // Calculate roll, pitch and yaw
         self.roll = self.compute_roll();
@@ -573,12 +607,14 @@ impl Fusion {
 
         // Restrict Pitch
         // This fixes the transition problem when the accelerometer angle jumps between -180 and 180 degrees
-        if ((self.pitch < -90.0) && (self.kalman_y_angle > 90.0)) || ((self.pitch > 90.0) && (self.kalman_y_angle < -90.0)) {
+        if ((self.pitch < -90.0) && (self.kalman_y_angle > 90.0))
+            || ((self.pitch > 90.0) && (self.kalman_y_angle < -90.0))
+        {
             self.kalman_y.set_angle(self.pitch);
             self.kalman_y_angle = self.pitch;
         } else {
             self.kalman_y.compute_angle(self.pitch, gyro_y_rate, dt);
-            self.kalman_y_angle = self.kalman_y.get_angle(); 
+            self.kalman_y_angle = self.kalman_y.get_angle();
         }
 
         // Invert rate, so it fits the restricted accelerometer reading
@@ -621,7 +657,7 @@ impl Fusion {
             }
         } else {
             self.kalman_z.compute_angle(self.yaw, gyro_z_rate, dt);
-            self.kalman_z_angle = self.kalman_z.get_angle(); 
+            self.kalman_z_angle = self.kalman_z.get_angle();
 
             // We add a smoothing filter to get better results
             self.ma_yaw.add_reading(self.kalman_z_angle);
@@ -654,7 +690,9 @@ impl Fusion {
 
             // HP filter for the speed of the X-axis
             self.hp_e_vx = accel_x;
-            self.hp_s_vx = self.hp_vx.compute(self.hp_e_vx, self.old_hp_e_vx, self.hp_s_vx, dt);
+            self.hp_s_vx = self
+                .hp_vx
+                .compute(self.hp_e_vx, self.old_hp_e_vx, self.hp_s_vx, dt);
 
             // LP filter for the speed of the X-axis
             self.lp_e_vx = self.hp_s_vx;
@@ -668,12 +706,13 @@ impl Fusion {
 
             // HP filter for the distance of the X-axis
             self.hp_e_dx = self.speed_x;
-            self.hp_s_dx = self.hp_dx.compute(self.hp_e_dx, self.old_hp_e_dx, self.hp_s_dx, dt);
+            self.hp_s_dx = self
+                .hp_dx
+                .compute(self.hp_e_dx, self.old_hp_e_dx, self.hp_s_dx, dt);
 
             // LP filter for the distance of the X-axis
             self.lp_e_dx = self.hp_s_dx;
             self.lp_s_dx = self.lp_dx.compute(self.lp_e_dx, self.lp_s_dx, dt);
-
 
             // Y-AXIS
             // We update the old value of the speed HP filter
@@ -681,7 +720,9 @@ impl Fusion {
 
             // HP filter for the speed of the Y-axis
             self.hp_e_vy = accel_y;
-            self.hp_s_vy = self.hp_vy.compute(self.hp_e_vy, self.old_hp_e_vy, self.hp_s_vy, dt);
+            self.hp_s_vy = self
+                .hp_vy
+                .compute(self.hp_e_vy, self.old_hp_e_vy, self.hp_s_vy, dt);
 
             // LP filter for the speed of the Y-axis
             self.lp_e_vy = self.hp_s_vy;
@@ -695,7 +736,9 @@ impl Fusion {
 
             // HP filter for the distance of the Y-axis
             self.hp_e_dy = self.speed_y;
-            self.hp_s_dy = self.hp_dy.compute(self.hp_e_dy, self.old_hp_e_dy, self.hp_s_dy, dt);
+            self.hp_s_dy = self
+                .hp_dy
+                .compute(self.hp_e_dy, self.old_hp_e_dy, self.hp_s_dy, dt);
 
             // LP filter for the distance of the Y-axis
             self.lp_e_dy = self.hp_s_dy;
@@ -758,7 +801,19 @@ impl Fusion {
 
     /// #### Set data all in once for the accelerometer, gyroscope and magnetometer.
     /// Should be in *m/s²*, *rad/s* and *uT*.
-    pub fn set_data_dof9(&mut self, acc_x: f32, acc_y: f32, acc_z: f32, gyro_x: f32, gyro_y: f32, gyro_z: f32, mag_rx: f32, mag_ry: f32, mag_rz: f32) {
+    #[allow(clippy::too_many_arguments)]
+    pub fn set_data_dof9(
+        &mut self,
+        acc_x: f32,
+        acc_y: f32,
+        acc_z: f32,
+        gyro_x: f32,
+        gyro_y: f32,
+        gyro_z: f32,
+        mag_rx: f32,
+        mag_ry: f32,
+        mag_rz: f32,
+    ) {
         self.acc_x = acc_x;
         self.acc_y = acc_y;
         self.acc_z = acc_z;
@@ -770,10 +825,17 @@ impl Fusion {
         self.mag_rz = mag_rz;
     }
 
-
     /// #### Set data all in once for the accelerometer and gyroscope.
     /// Should be in *m/s²* and *rad/s*.
-    pub fn set_data_dof6(&mut self, acc_x: f32, acc_y: f32, acc_z: f32, gyro_x: f32, gyro_y: f32, gyro_z: f32) {
+    pub fn set_data_dof6(
+        &mut self,
+        acc_x: f32,
+        acc_y: f32,
+        acc_z: f32,
+        gyro_x: f32,
+        gyro_y: f32,
+        gyro_z: f32,
+    ) {
         self.acc_x = acc_x;
         self.acc_y = acc_y;
         self.acc_z = acc_z;
@@ -784,13 +846,13 @@ impl Fusion {
 
     /// #### Set old value for the High Pass Filter.
     /// Should be in *m/s²*.
-    /// 
+    ///
     /// ***This function must be called before reading data from the sensor.***
     pub fn set_old_values(&mut self, acc_x: f32, acc_y: f32) {
         self.old_hp_e_vx = acc_x * G_TO_SCALE;
         self.old_hp_e_vy = acc_y * G_TO_SCALE;
     }
-    
+
     /// Returns the scaled value of the magnetic field on the X-Axis once computed with roll and pitch.
     /// Data is in *microtesla (uT)*.
     pub fn get_mag_x(&self) -> f32 {
@@ -829,16 +891,18 @@ impl Fusion {
     }
 
     /// #### Computes yaw from accelerometer data.
-    /// Computes and returns the yaw in *degrees* for Dof9 and the yaw velocity in *degrees/s* for Dof6. 
+    /// Computes and returns the yaw in *degrees* for Dof9 and the yaw velocity in *degrees/s* for Dof6.
     pub fn compute_yaw(&mut self) -> f32 {
-
         if self.mode == Mode::Dof6 {
-            (self.acc_z / (self.acc_x * self.acc_x + self.acc_z * self.acc_z).sqrt()).atan() * RAD2DEG
+            (self.acc_z / (self.acc_x * self.acc_x + self.acc_z * self.acc_z).sqrt()).atan()
+                * RAD2DEG
         } else {
             let roll_rad = self.roll * DEG2RAD;
             let pitch_rad = self.pitch * DEG2RAD;
             // Tilt compensation
-            self.mag_x = self.mag_rx * pitch_rad.cos() + self.mag_ry * roll_rad.sin() * pitch_rad.sin() - self.mag_rz * self.roll.cos() * pitch_rad.sin();
+            self.mag_x = self.mag_rx * pitch_rad.cos()
+                + self.mag_ry * roll_rad.sin() * pitch_rad.sin()
+                - self.mag_rz * self.roll.cos() * pitch_rad.sin();
             self.mag_y = -self.mag_ry * roll_rad.cos() + self.mag_rz * roll_rad.sin();
             (-self.mag_y.atan2(self.mag_x)) * RAD2DEG
         }
@@ -847,14 +911,14 @@ impl Fusion {
     /// #### Get the heading from the magnetometer.
     /// This is the heading of the sensor after the Kalman filter and the moving average.
     /// The heading is updated every time the `step` function is called.
-    /// 
+    ///
     /// Returns the heading in *degrees*.
-    /// 
+    ///
     /// In Dof9 mode the heading is computed from the magnetometer data.
     /// Thus, this is the real heading of the sensor.
     /// In Dof6 mode the heading is computed from the accelerometer data.
     /// Thus, this is the same as the yaw.
-    /// 
+    ///
     /// ***Note***: This function is just a getter. If you want to compute and get the actual yaw, use `compute_yaw()` or run a step.
     pub fn get_heading(&self) -> f32 {
         if self.mode == Mode::Dof9 {
@@ -872,9 +936,9 @@ impl Fusion {
         self.final_distance = 0.;
     }
 
-    /// #### Set the measured angle to 0. 
-    /// Acts like an artificial reset. 
-    /// 
+    /// #### Set the measured angle to 0.
+    /// Acts like an artificial reset.
+    ///
     /// ***NB: This is only useful for Dof6.***
     pub fn reset_angle_z(&mut self) {
         if self.mode == Mode::Dof6 {
@@ -883,10 +947,10 @@ impl Fusion {
     }
 
     /// #### Set the distance offsets to the current state of the system.
-    /// 
+    ///
     /// ***Warning: you can't go back to the previous state once changed.***
-    /// 
-    /// Usually used when auto-resetting the distance variables. 
+    ///
+    /// Usually used when auto-resetting the distance variables.
     /// Must be called when the sensor does NOT move. Otherwise, next data won't be accurate.
     pub fn reset_offset_distance(&mut self) {
         self.offset_x = self.average_x;
@@ -895,10 +959,10 @@ impl Fusion {
 
     /// #### Set the Kalman offsets to the current state of the system.
     /// ***Warning: you can't go back to the previous state once changed.***
-    /// 
+    ///
     /// Usually used when auto-resetting the angle variables.  
     /// Must be called when the sensor does ***NOT*** move. Otherwise, next data won't be accurate.
-    /// 
+    ///
     /// ***NB: This is only useful for Dof6.***
     pub fn reset_offset_angle(&mut self) {
         if self.mode == Mode::Dof6 {
@@ -920,9 +984,9 @@ impl Fusion {
 
     /// #### Get the Final Z-Axis angle in *degrees*.
     /// If the sensor is in Dof9 mode, the angle is the yaw angle in after the Kalman filter.
-    /// 
+    ///
     /// If the sensor is in Dof6 mode, this is the accumulated angle traveled by the sensor.
-    /// 
+    ///
     /// Use DEG2RAD const to convert to *radians*.
     pub fn get_z_angle(&self) -> f32 {
         if self.mode == Mode::Dof6 {
@@ -930,17 +994,15 @@ impl Fusion {
         } else {
             self.kalman_z_angle
         }
-        
     }
 
-    /// #### Get the Z-axis angle velocity in *degrees/s*. 
+    /// #### Get the Z-axis angle velocity in *degrees/s*.
     /// If the sensor is in Dof9 mode, the value is the derivative of the yaw angle.
-    /// 
+    ///
     /// If the sensor is in Dof6 mode, the value is the output of kalman filter.
-    /// 
+    ///
     /// Use DEG2RAD const to convert to *rad/s*.
     pub fn get_z_angular_velocity(&self) -> f32 {
-        
         if self.mode == Mode::Dof6 {
             self.kalman_z_angle - self.offset_kalman
         } else {
@@ -978,7 +1040,7 @@ impl Fusion {
         self.mode
     }
 
-    /// #### Set the fusion's mode. 
+    /// #### Set the fusion's mode.
     /// Either Dof6 or Dof9, respectively for 6-axis and 9-axis degrees of freedom.
     pub fn set_mode(&mut self, mode: Mode) {
         self.mode = mode;
@@ -1002,9 +1064,9 @@ impl Fusion {
     /// #### Set the buffer zone on the X-Axis.
     /// This buffer zone is used while measuring distance.
     /// It's made to avoid to constantly count the distance.
-    /// 
+    ///
     /// It must be a percentage of the scale factor (that defaults to 100).
-    /// 
+    ///
     /// Defaults to 0.13 (13% of the scale factor).
     pub fn set_buffer_zone_x(&mut self, buffer_zone: f32) {
         self.buffer_zone_x = buffer_zone * self.scale_factor;
@@ -1013,9 +1075,9 @@ impl Fusion {
     /// #### Set the buffer zone on the Y-Axis.
     /// This buffer zone is used while measuring distance.
     /// It's made to avoid to constantly count the distance.
-    /// 
+    ///
     /// It must be a percentage of the scale factor (that defaults to 100).
-    /// 
+    ///
     /// Defaults to 0.10 (10% of the scale factor).
     pub fn set_buffer_zone_y(&mut self, buffer_zone: f32) {
         self.buffer_zone_y = buffer_zone * self.scale_factor;
@@ -1024,7 +1086,7 @@ impl Fusion {
     /// #### Set the scale factor for the distance measurements.
     /// This is the factor that is used to get a more accurate distance measurement
     /// and get a better readability of the distance while working in cm.
-    /// 
+    ///
     /// Defaults to 100.
     pub fn set_scale_factor(&mut self, scale_factor: f32) {
         self.scale_factor = scale_factor;
@@ -1034,14 +1096,14 @@ impl Fusion {
     /// This is the factor that is used to correct the distance measurements.
     /// While filtering the data, we are losing some precision in amplitude.
     /// To avoid this, we are applying a correction factor to the data.
-    /// 
+    ///
     /// Defaults to G2 / SQRT_G, where G2 is the gravity constant squared and SQRT_G is the square root of G.
     pub fn set_correction_factor(&mut self, correction_factor: f32) {
         self.correction_factor = correction_factor;
     }
 
     /// #### Set the buffer zone on the Z-Axis for the Kalman filter.
-    /// DOF6 only. 
+    /// DOF6 only.
     /// Defaults to 0.05.
     pub fn set_buffer_zone_kalman(&mut self, buffer_zone: f32) {
         self.buffer_zone_kalman = buffer_zone;
@@ -1050,7 +1112,7 @@ impl Fusion {
     /// #### Set the offset counter for the distance measurements.
     /// To measure the distance, we need the signal to be stable.
     /// So we ignore the first few measurements.
-    /// 
+    ///
     /// Defaults to 500.
     pub fn set_counter_offset(&mut self, counter_offset: u32) {
         self.counter_offset = counter_offset;
@@ -1058,10 +1120,9 @@ impl Fusion {
 
     /// #### Disable the distance measurements.
     /// This allows to gain execution speed.
-    /// 
+    ///
     /// Defaults to true. (Distance measurements are enabled by default)
     pub fn disable_distance(&mut self, disable: bool) {
         self.enable_distance = disable;
     }
-
 }

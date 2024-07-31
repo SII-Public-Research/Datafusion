@@ -3,14 +3,12 @@ use std::time::Instant;
 use rppal::hal::Delay;
 use rppal::i2c::I2c;
 
-use embedded_hal::blocking::delay::*;
+use embedded_hal::delay::*;
 
 use adafruit_nxp::*;
-use datafusion_imu::{self as _, Fusion, Mode};
-
+use datafusion_imu::{self as _, filters::Smooth, Fusion, Mode};
 
 fn main() -> Result<(), SensorError<rppal::i2c::Error>> {
-
     // Init a delay used in certain functions and between each loop.
     let mut delay = Delay::new();
 
@@ -43,20 +41,20 @@ fn main() -> Result<(), SensorError<rppal::i2c::Error>> {
     let gyro_y = sensor.gyro_sensor.get_scaled_y();
     let gyro_z = sensor.gyro_sensor.get_scaled_z();
 
-    /* Mode DOF9 
+    /* Mode DOF9
     let mag_rx = sensor.mag_sensor.get_scaled_x();
     let mag_ry = sensor.mag_sensor.get_scaled_y();
     let mag_rz = sensor.mag_sensor.get_scaled_z();
     */
 
     // Create a datafusion object
-    let mut fusion = Fusion::new(0.05, 20., 50);
+    let mut fusion = Fusion::new(0.05, 20., Smooth::new(50), Smooth::new(50), Smooth::new(50));
     fusion.set_mode(Mode::Dof6);
 
     /* DOF9
     // Set data to the fusion object DOF9
     //fusion.set_data_dof9(acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z, mag_rx, mag_ry, mag_rz);
-    */
+     */
 
     // Set data to the fusion object DOF6
     fusion.set_data_dof6(acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z);
@@ -65,11 +63,11 @@ fn main() -> Result<(), SensorError<rppal::i2c::Error>> {
     fusion.init();
 
     // Distance auto reset variables
-    let mut distance= 0.0;
-    let mut old_distance:f32;
+    let mut distance = 0.0;
+    let mut old_distance: f32;
     let mut counter_reset_distance = 0;
 
-    // Angle auto reset variables --> DOF6 Only 
+    // Angle auto reset variables --> DOF6 Only
     let mut angle_z = 0.0;
     let mut old_angle_z: f32;
     let mut counter_reset_angle_z = 0;
@@ -78,7 +76,6 @@ fn main() -> Result<(), SensorError<rppal::i2c::Error>> {
     let mut time = Instant::now();
 
     loop {
-
         // Calculate delta time in seconds
         let dt = time.elapsed().as_micros() as f32 / 1_000_000.;
         time = Instant::now();
@@ -138,6 +135,6 @@ fn main() -> Result<(), SensorError<rppal::i2c::Error>> {
         std::println!("Angle Z: {} °", angle_z);
         std::println!("Total distance traveled: {} cm", distance);
 
-        delay.delay_ms(5_u8);
+        delay.delay_ms(5_u32);
     }
 }

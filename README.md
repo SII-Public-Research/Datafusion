@@ -49,7 +49,7 @@ use rppal::i2c::I2c;
 use embedded_hal::blocking::delay::*;
 
 use adafruit::*;
-use datafusion::{self as _, Fusion};
+use datafusion::{self as _, filters::Smooth, Fusion};
 
 fn main() -> Result<(), SensorError<rppal::i2c::Error>> {
 
@@ -89,7 +89,7 @@ fn main() -> Result<(), SensorError<rppal::i2c::Error>> {
     let mag_rz = sensor.mag_sensor.get_scaled_z();
 
     // Create a datafusion object
-    let mut fusion = Fusion::new(0.05, 20., 50);
+    let mut fusion = Fusion::new(0.05, 20., Smooth::new(50), Smooth::new(50), Smooth::new(50));
     fusion.set_mode(datafusion::Mode::Dof9);
 
     // Set data to the fusion object

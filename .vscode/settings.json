@@ -1,5 +1,5 @@
 {
-    "rust-analyzer.cargo.target": "aarch64-unknown-linux-gnu",
+    "rust-analyzer.cargo.features": ["alloc"],
     "editor.bracketPairColorization.enabled": true,
     "editor.guides.bracketPairs":"active"
 }
